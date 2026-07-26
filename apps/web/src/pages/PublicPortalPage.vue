@@ -17,6 +17,10 @@
             </q-input>
             <q-btn unelevated no-caps color="primary" icon="filter_alt" label="Filtrar" />
           </div>
+          <div class="mt-4 flex flex-wrap gap-3">
+            <q-btn unelevated no-caps color="secondary" icon="how_to_reg" label="Inscrever minha equipe" to="/inscrever-equipe" />
+            <q-btn outline no-caps color="primary" icon="login" label="Área do representante" to="/login" />
+          </div>
         </div>
       </div>
     </section>

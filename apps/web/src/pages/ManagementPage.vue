@@ -42,7 +42,7 @@
       </div>
 
       <div v-else-if="section === 'teams'" class="module-grid">
-        <FormPanel title="Cadastrar time" icon="groups" submit-label="Salvar time" @submit="submit('/api/teams', teamForm, resetTeam)">
+        <FormPanel v-if="auth.isStaff" title="Cadastrar time" icon="groups" submit-label="Salvar time" @submit="submit('/api/teams', teamForm, resetTeam)">
           <q-input v-model="teamForm.name" outlined dense label="Nome do time" />
           <q-input v-model="teamForm.city" outlined dense label="Cidade" />
           <q-input v-model="teamForm.coach" outlined dense label="Treinador ou responsavel" />
@@ -51,7 +51,7 @@
 
         <FormPanel title="Cadastrar atleta" icon="badge" submit-label="Salvar atleta" @submit="submit('/api/athletes', athleteForm, resetAthlete)">
           <q-input v-model="athleteForm.name" outlined dense label="Nome do atleta" />
-          <q-select v-model="athleteForm.team" outlined dense label="Time" :options="teamOptions" />
+          <q-select v-model="athleteForm.team" outlined dense label="Time" :options="teamOptions" :disable="auth.isRepresentative" />
           <q-input v-model="athleteForm.document" outlined dense label="Documento federativo" />
           <q-input v-model="athleteForm.jerseyNumber" outlined dense label="Numero da camisa" />
           <q-select v-model="athleteForm.position" outlined dense label="Funcao" :options="['Linha', 'Goleiro']" />
@@ -59,13 +59,13 @@
         </FormPanel>
 
         <FormPanel title="Comissao tecnica" icon="engineering" submit-label="Salvar membro" @submit="submit('/api/team-staff', staffForm, resetStaff)">
-          <q-select v-model="staffForm.team" outlined dense label="Time" :options="teamOptions" />
+          <q-select v-model="staffForm.team" outlined dense label="Time" :options="teamOptions" :disable="auth.isRepresentative" />
           <q-input v-model="staffForm.name" outlined dense label="Nome" />
           <q-select v-model="staffForm.role" outlined dense label="Cargo" :options="staffRoleOptions" />
           <q-input v-model="staffForm.document" outlined dense label="Documento" />
         </FormPanel>
 
-        <DataPanel title="Times">
+        <DataPanel v-if="auth.isStaff" title="Times">
           <q-table flat :rows="store.teams" :columns="teamColumns" row-key="id" :pagination="tablePagination" />
         </DataPanel>
 
@@ -77,7 +77,7 @@
           <q-table flat :rows="store.teamStaff" :columns="staffColumns" row-key="id" :pagination="tablePagination" />
         </DataPanel>
 
-        <DataPanel title="Painel dos times">
+        <DataPanel v-if="auth.isStaff" title="Painel dos times">
           <q-table flat :rows="store.teamPanels" :columns="panelColumns" row-key="id" :pagination="tablePagination" />
         </DataPanel>
       </div>
@@ -152,8 +152,8 @@
 
       <div v-else-if="section === 'documents'" class="module-grid">
         <FormPanel title="Novo documento" icon="folder" submit-label="Salvar documento" @submit="submit('/api/documents', documentForm, resetDocument)">
-          <q-select v-model="documentForm.ownerType" outlined dense label="Vinculo" :options="['Equipe', 'Atleta']" />
-          <q-select v-model="documentForm.ownerName" outlined dense use-input fill-input hide-selected new-value-mode="add-unique" label="Equipe ou atleta" :options="documentOwnerOptions" />
+          <q-select v-model="documentForm.ownerType" outlined dense label="Vinculo" :options="['Equipe', 'Atleta']" :disable="auth.isRepresentative" />
+          <q-select v-model="documentForm.ownerName" outlined dense use-input fill-input hide-selected new-value-mode="add-unique" label="Equipe ou atleta" :options="documentOwnerOptions" :disable="auth.isRepresentative" />
           <q-select v-model="documentForm.documentType" outlined dense label="Tipo" :options="documentTypeOptions" />
           <q-select v-model="documentForm.status" outlined dense label="Status" :options="documentStatusOptions" />
           <q-input v-model="documentForm.fileUrl" outlined dense label="URL do arquivo" />
@@ -166,12 +166,18 @@
 
       <div v-else-if="section === 'registrations'" class="module-grid">
         <FormPanel title="Inscricao por link" icon="how_to_reg" submit-label="Salvar inscricao" @submit="submit('/api/registrations', registrationForm, resetRegistration)">
-          <q-input v-model="registrationForm.teamName" outlined dense label="Time" />
+          <q-input v-model="registrationForm.teamName" outlined dense label="Time" :disable="auth.isRepresentative" />
           <q-input v-model="registrationForm.responsible" outlined dense label="Responsavel" />
+          <q-input v-model="registrationForm.email" outlined dense type="email" label="E-mail" />
+          <q-input v-model="registrationForm.phone" outlined dense type="tel" label="Telefone" />
           <q-select v-model="registrationForm.category" outlined dense label="Categoria" :options="categoryOptions" />
+          <label class="privacy-check">
+            <input v-model="registrationForm.privacyAccepted" type="checkbox" />
+            <span>Confirmo a ciência da <router-link to="/privacidade">Política de Privacidade</router-link>.</span>
+          </label>
         </FormPanel>
 
-        <FormPanel title="Atualizar inscricao" icon="verified" submit-label="Atualizar status" @submit="patch(`/api/registrations/${registrationStatusForm.id}/status`, registrationStatusForm, resetRegistrationStatus)">
+        <FormPanel v-if="auth.isStaff" title="Atualizar inscricao" icon="verified" submit-label="Atualizar status" @submit="patch(`/api/registrations/${registrationStatusForm.id}/status`, registrationStatusForm, resetRegistrationStatus)">
           <q-select v-model="registrationStatusForm.id" outlined dense emit-value map-options label="Inscricao" :options="registrationOptions" />
           <q-select v-model="registrationStatusForm.status" outlined dense label="Status" :options="['Aprovada', 'Em analise', 'Documentos pendentes', 'Reprovada']" />
         </FormPanel>
@@ -248,6 +254,7 @@ import { computed, defineComponent, h, onMounted, reactive, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import { useRoute } from 'vue-router';
 import { useLeagueStore } from '../stores/league';
+import { useAuthStore } from '../stores/auth';
 
 const props = defineProps({
   section: {
@@ -311,6 +318,7 @@ const DataPanel = defineComponent({
 const $q = useQuasar();
 const route = useRoute();
 const store = useLeagueStore();
+const auth = useAuthStore();
 
 const section = computed(() => props.section);
 const sectionInfo = computed(() => sectionConfig[props.section] || sectionConfig.competitions);
@@ -344,7 +352,7 @@ const generatedRoundForm = reactive({ round: 'Rodada gerada', date: '', venue: '
 const scoreForm = reactive({ matchId: null, homeGoals: 0, awayGoals: 0, homeScorer: '', awayScorer: '' });
 const summaryForm = reactive({ matchId: null, documentType: 'Sumula pre-jogo', status: 'Recebido', fileUrl: '' });
 const documentForm = reactive({ ownerType: 'Equipe', ownerName: '', documentType: 'Ficha de inscricao', status: 'Recebido', fileUrl: '' });
-const registrationForm = reactive({ teamName: '', responsible: '', category: '' });
+const registrationForm = reactive({ teamName: '', responsible: '', email: '', phone: '', category: '', privacyAccepted: true });
 const registrationStatusForm = reactive({ id: null, status: 'Aprovada' });
 const refereeForm = reactive({ name: '', city: '', phone: '' });
 const venueForm = reactive({ name: '', city: '', address: '', capacity: 0 });
@@ -356,7 +364,9 @@ const newsForm = reactive({ title: '', tag: 'Competicao' });
 
 const categoryOptions = computed(() => store.categories.map((item) => item.name));
 const championshipOptions = computed(() => store.championships.map((item) => item.name));
-const teamOptions = computed(() => store.teams.map((item) => item.name));
+const teamOptions = computed(() => auth.isRepresentative && auth.user?.teamName
+  ? [auth.user.teamName]
+  : store.teams.map((item) => item.name));
 const venueOptions = computed(() => store.venues.map((item) => item.name));
 const athleteOptions = computed(() => store.athletes.map((item) => item.name));
 const matchOptions = computed(() =>
@@ -414,7 +424,6 @@ const staffColumns = [
 const panelColumns = [
   { name: 'teamName', label: 'Time', field: 'teamName', align: 'left' },
   { name: 'login', label: 'Login', field: 'login', align: 'left' },
-  { name: 'temporaryPassword', label: 'Senha temporaria', field: 'temporaryPassword', align: 'left' },
   { name: 'status', label: 'Status', field: 'status', align: 'left' }
 ];
 const matchColumns = [
@@ -443,6 +452,8 @@ const documentColumns = [
 const registrationColumns = [
   { name: 'teamName', label: 'Time', field: 'teamName', align: 'left' },
   { name: 'responsible', label: 'Responsavel', field: 'responsible', align: 'left' },
+  { name: 'email', label: 'E-mail', field: 'email', align: 'left' },
+  { name: 'phone', label: 'Telefone', field: 'phone', align: 'left' },
   { name: 'category', label: 'Categoria', field: 'category', align: 'left' },
   { name: 'status', label: 'Status', field: 'status', align: 'left' }
 ];
@@ -558,7 +569,7 @@ function resetDocument() {
   Object.assign(documentForm, { ownerType: 'Equipe', ownerName: '', documentType: 'Ficha de inscricao', status: 'Recebido', fileUrl: '' });
 }
 function resetRegistration() {
-  Object.assign(registrationForm, { teamName: '', responsible: '', category: '' });
+  Object.assign(registrationForm, { teamName: auth.user?.teamName || '', responsible: '', email: '', phone: '', category: '', privacyAccepted: true });
 }
 function resetRegistrationStatus() {
   Object.assign(registrationStatusForm, { id: null, status: 'Aprovada' });
@@ -608,6 +619,13 @@ watch(
 
 onMounted(async () => {
   await store.load();
+  if (auth.isRepresentative && auth.user?.teamName) {
+    athleteForm.team = auth.user.teamName;
+    staffForm.team = auth.user.teamName;
+    documentForm.ownerType = 'Equipe';
+    documentForm.ownerName = auth.user.teamName;
+    registrationForm.teamName = auth.user.teamName;
+  }
   applyDefaultChampionship();
   applyRouteMatch();
 });

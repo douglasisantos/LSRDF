@@ -48,6 +48,8 @@ const mapRegistration = (item) => ({
   id: item.id,
   teamName: item.team_name,
   responsible: item.responsible,
+  email: item.email,
+  phone: item.phone,
   category: item.category,
   status: item.status
 });
@@ -112,7 +114,6 @@ const mapTeamPanel = (item) => ({
   id: item.id,
   teamName: item.team_name,
   login: item.login,
-  temporaryPassword: item.temporary_password,
   status: item.status
 });
 
@@ -173,11 +174,6 @@ export function createTeam(input) {
     INSERT INTO teams (name, city, coach, athletes)
     VALUES (@name, @city, @coach, @athletes)
   `).run(input);
-
-  db.prepare(`
-    INSERT INTO team_panels (team_name, login, temporary_password, status)
-    VALUES (?, ?, 'LSRDF-2026', 'Ativo')
-  `).run(input.name, input.name.toLowerCase().replaceAll(' ', '.'));
 
   return mapTeam(row('SELECT * FROM teams WHERE id = ?', result.lastInsertRowid));
 }
@@ -251,8 +247,8 @@ export function getRegistrations() {
 
 export function createRegistration(input) {
   const result = db.prepare(`
-    INSERT INTO registrations (team_name, responsible, category, status)
-    VALUES (@teamName, @responsible, @category, 'Em analise')
+    INSERT INTO registrations (team_name, responsible, email, phone, category, status)
+    VALUES (@teamName, @responsible, @email, @phone, @category, 'Em analise')
   `).run(input);
 
   return mapRegistration(row('SELECT * FROM registrations WHERE id = ?', result.lastInsertRowid));

@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { useAuthStore } from './auth';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3333';
 
@@ -66,10 +67,7 @@ const fallbackData = {
   roundSelections: [
     { id: 1, round: 'Rodada 3', athlete: 'Gustavo Moraes', team: 'Avenida Futsal', note: 'Destaque ofensivo da rodada' }
   ],
-  teamPanels: [
-    { id: 1, teamName: 'Avenida Futsal', login: 'avenida.futsal', temporaryPassword: 'LSRDF-2026', status: 'Ativo' },
-    { id: 2, teamName: 'Atletico Vale', login: 'atletico.vale', temporaryPassword: 'LSRDF-2026', status: 'Ativo' }
-  ],
+  teamPanels: [],
   teamStaff: [
     { id: 1, team: 'Avenida Futsal', name: 'Marcos Vieira', role: 'Treinador', document: '', status: 'Ativo' },
     { id: 2, team: 'Avenida Futsal', name: 'Rafael Torres', role: 'Preparador Fisico', document: '', status: 'Ativo' },
@@ -78,7 +76,10 @@ const fallbackData = {
 };
 
 async function getJson(path) {
-  const response = await fetch(`${API_URL}${path}`);
+  const token = sessionStorage.getItem('lsrdf_session');
+  const response = await fetch(`${API_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
   if (!response.ok) {
     throw new Error(`Erro ao carregar ${path}`);
   }
@@ -86,9 +87,13 @@ async function getJson(path) {
 }
 
 async function sendJson(path, method, body) {
+  const token = sessionStorage.getItem('lsrdf_session');
   const response = await fetch(`${API_URL}${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
     body: JSON.stringify(body)
   });
   if (!response.ok) {
@@ -102,68 +107,48 @@ export const useLeagueStore = defineStore('league', {
   state: () => ({
     loading: false,
     offline: false,
-    ...fallbackData
+    ...fallbackData,
+    registrations: [],
+    referees: [],
+    documents: [],
+    suspensions: [],
+    teamPanels: [],
+    teamStaff: []
   }),
   actions: {
     async load() {
       this.loading = true;
       this.offline = false;
       try {
-        const [
-          overview,
-          championships,
-          teams,
-          athletes,
-          matches,
-          registrations,
-          sponsors,
-          news,
-          categories,
-          referees,
-          venues,
-          documents,
-          suspensions,
-          broadcasts,
-          roundSelections,
-          teamPanels,
-          teamStaff
-        ] = await Promise.all([
-          getJson('/api/overview'),
-          getJson('/api/championships'),
-          getJson('/api/teams'),
-          getJson('/api/athletes'),
-          getJson('/api/matches'),
-          getJson('/api/registrations'),
-          getJson('/api/sponsors'),
-          getJson('/api/news'),
-          getJson('/api/categories'),
-          getJson('/api/referees'),
-          getJson('/api/venues'),
-          getJson('/api/documents'),
-          getJson('/api/suspensions'),
-          getJson('/api/broadcasts'),
-          getJson('/api/round-selections'),
-          getJson('/api/team-panels'),
-          getJson('/api/team-staff')
-        ]);
-
-        this.overview = overview;
-        this.championships = championships;
-        this.teams = teams;
-        this.athletes = athletes;
-        this.matches = matches;
-        this.registrations = registrations;
-        this.sponsors = sponsors;
-        this.news = news;
-        this.categories = categories;
-        this.referees = referees;
-        this.venues = venues;
-        this.documents = documents;
-        this.suspensions = suspensions;
-        this.broadcasts = broadcasts;
-        this.roundSelections = roundSelections;
-        this.teamPanels = teamPanels;
-        this.teamStaff = teamStaff;
+        const auth = useAuthStore();
+        const publicEndpoints = {
+          overview: '/api/overview', championships: '/api/championships', teams: '/api/teams',
+          athletes: '/api/athletes', matches: '/api/matches', sponsors: '/api/sponsors',
+          news: '/api/news', categories: '/api/categories', venues: '/api/venues',
+          broadcasts: '/api/broadcasts', roundSelections: '/api/round-selections'
+        };
+        const representativeEndpoints = {
+          registrations: '/api/registrations', documents: '/api/documents', teamStaff: '/api/team-staff'
+        };
+        const staffEndpoints = {
+          ...representativeEndpoints, referees: '/api/referees', suspensions: '/api/suspensions',
+          teamPanels: '/api/team-panels'
+        };
+        const endpoints = {
+          ...publicEndpoints,
+          ...(auth.isRepresentative ? representativeEndpoints : {}),
+          ...(auth.isStaff ? staffEndpoints : {})
+        };
+        const results = await Promise.all(Object.entries(endpoints).map(async ([key, path]) => [key, await getJson(path)]));
+        results.forEach(([key, value]) => { this[key] = value; });
+        if (!auth.isAuthenticated) {
+          this.registrations = [];
+          this.documents = [];
+          this.referees = [];
+          this.suspensions = [];
+          this.teamPanels = [];
+          this.teamStaff = [];
+        }
       } catch (error) {
         this.offline = true;
       } finally {

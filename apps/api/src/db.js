@@ -155,6 +155,48 @@ export function initializeDatabase() {
       extra_period TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'Pre-jogo'
     );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      name TEXT NOT NULL,
+      password_hash TEXT,
+      google_subject TEXT UNIQUE,
+      role TEXT NOT NULL DEFAULT 'user'
+        CHECK (role IN ('user', 'representative', 'staff', 'admin')),
+      team_name TEXT,
+      status TEXT NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active', 'blocked')),
+      privacy_accepted_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      last_used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      user_agent TEXT,
+      ip_address TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      action TEXT NOT NULL,
+      resource TEXT NOT NULL,
+      resource_id TEXT,
+      ip_address TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS sessions_token_hash_idx ON sessions(token_hash);
+    CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx ON audit_logs(created_at);
   `);
 
   migrateColumns();
@@ -176,6 +218,10 @@ function migrateColumns() {
   addColumnIfMissing('athletes', 'registration_status', "TEXT NOT NULL DEFAULT 'Apto'");
   addColumnIfMissing('matches', 'championship', "TEXT NOT NULL DEFAULT 'Copa Sul Riograndense 2026'");
   addColumnIfMissing('matches', 'time', "TEXT NOT NULL DEFAULT '20:00'");
+  addColumnIfMissing('registrations', 'email', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing('registrations', 'phone', "TEXT NOT NULL DEFAULT ''");
+  // As credenciais coletivas antigas nao sao mais validas.
+  db.prepare('DELETE FROM team_panels').run();
 }
 
 function seedIfEmpty() {
@@ -321,18 +367,6 @@ function seedFeatureTablesIfEmpty() {
       INSERT INTO round_selections (round, athlete, team, note)
       VALUES ('Rodada 3', 'Gustavo Moraes', 'Avenida Futsal', 'Destaque ofensivo da rodada')
     `).run();
-  }
-
-  if (db.prepare('SELECT COUNT(*) AS total FROM team_panels').get().total === 0) {
-    [
-      ['Avenida Futsal', 'avenida.futsal', 'LSRDF-2026', 'Ativo'],
-      ['Atletico Vale', 'atletico.vale', 'LSRDF-2026', 'Ativo']
-    ].forEach((item) => {
-      db.prepare(`
-        INSERT INTO team_panels (team_name, login, temporary_password, status)
-        VALUES (?, ?, ?, ?)
-      `).run(...item);
-    });
   }
 
   if (db.prepare('SELECT COUNT(*) AS total FROM team_staff').get().total === 0) {
